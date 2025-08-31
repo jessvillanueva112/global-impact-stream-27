@@ -2,31 +2,47 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { VoiceRecorder } from "./VoiceRecorder";
 import { ImageUpload } from "./ImageUpload";
+import { PrivacyLevelSelector, PrivacyLevel, SurvivorAnonymityLevel } from "../forms/PrivacyLevelSelector";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Mic, Type, Camera, Send, Shield } from "lucide-react";
+import { Mic, Type, Camera, Send, Shield, User, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { submissionService } from "@/services/submissionService";
 
 interface SubmissionData {
   content: string;
-  privacyLevel: 'internal' | 'ally' | 'donor' | 'public';
+  privacyLevel: PrivacyLevel;
+  survivorAnonymityLevel: SurvivorAnonymityLevel;
+  submissionType: string;
   type: 'voice' | 'text' | 'photo' | 'mixed';
   audioBlob?: Blob;
   images?: File[];
+  title?: string;
+  urgencyLevel?: 'low' | 'medium' | 'high' | 'critical';
+  survivorCount?: number;
+  newSurvivors?: number;
+  existingSurvivors?: number;
+  containsSurvivorStory?: boolean;
 }
 
 export const SubmissionForm = () => {
   const [submission, setSubmission] = useState<SubmissionData>({
     content: '',
     privacyLevel: 'ally',
-    type: 'text'
+    survivorAnonymityLevel: 'full',
+    submissionType: 'general_report',
+    type: 'text',
+    urgencyLevel: 'medium',
+    containsSurvivorStory: false
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState('text');
+  const [showSurvivorFields, setShowSurvivorFields] = useState(false);
   
   const { toast } = useToast();
 
@@ -56,29 +72,63 @@ export const SubmissionForm = () => {
       return;
     }
 
+    // Validate survivor count logic if provided
+    if (showSurvivorFields && submission.newSurvivors && submission.existingSurvivors && submission.survivorCount) {
+      if (submission.newSurvivors + submission.existingSurvivors !== submission.survivorCount) {
+        toast({
+          title: "Survivor Count Mismatch",
+          description: "New survivors + existing survivors must equal total survivors.",
+          variant: "destructive"
+        });
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     
     try {
-      // Simulate API call - in real app, this would upload to Supabase
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      const submissionData = {
+        content: submission.content,
+        privacyLevel: submission.privacyLevel,
+        submissionType: submission.submissionType,
+        audioBlob: submission.audioBlob,
+        images: submission.images,
+        title: submission.title,
+        urgencyLevel: submission.urgencyLevel,
+        newSurvivors: submission.newSurvivors,
+        existingSurvivors: submission.existingSurvivors,
+        totalSurvivors: submission.survivorCount,
+        mediaFiles: {
+          survivorAnonymityLevel: submission.survivorAnonymityLevel,
+          containsSurvivorStory: submission.containsSurvivorStory
+        }
+      };
+
+      const result = await submissionService.createSubmission(submissionData);
       
       toast({
         title: "Submission Successful",
-        description: "Your report has been submitted and is being processed.",
+        description: "Your report has been submitted and is being processed with AI analysis.",
       });
       
       // Reset form
       setSubmission({
         content: '',
         privacyLevel: 'ally',
-        type: 'text'
+        survivorAnonymityLevel: 'full',
+        submissionType: 'general_report',
+        type: 'text',
+        urgencyLevel: 'medium',
+        containsSurvivorStory: false
       });
       setActiveTab('text');
+      setShowSurvivorFields(false);
       
     } catch (error) {
+      console.error('Submission error:', error);
       toast({
         title: "Submission Failed",
-        description: "Please try again or contact support if the problem persists.",
+        description: error.message || "Please try again or contact support if the problem persists.",
         variant: "destructive"
       });
     } finally {
@@ -174,35 +224,151 @@ export const SubmissionForm = () => {
             </TabsContent>
           </Tabs>
 
-          {/* Privacy Level Selection */}
-          <div className="space-y-3">
-            <Label className="flex items-center gap-2">
-              <Shield className="h-4 w-4" />
-              Privacy Level
-            </Label>
-            <Select 
-              value={submission.privacyLevel} 
-              onValueChange={(value: any) => setSubmission(prev => ({ ...prev, privacyLevel: value }))}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="internal">Internal Team Only</SelectItem>
-                <SelectItem value="ally">Ally HQ Access</SelectItem>
-                <SelectItem value="donor">Shareable with Donors</SelectItem>
-                <SelectItem value="public">Public Communications</SelectItem>
-              </SelectContent>
-            </Select>
-            <div className="flex items-center gap-2">
-              <Badge variant={getPrivacyBadgeVariant(submission.privacyLevel)}>
-                {submission.privacyLevel.charAt(0).toUpperCase() + submission.privacyLevel.slice(1)}
-              </Badge>
-              <span className="text-xs text-muted-foreground">
-                {getPrivacyDescription(submission.privacyLevel)}
-              </span>
+          {/* Submission Details */}
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="title">Report Title (Optional)</Label>
+                <Input
+                  id="title"
+                  placeholder="Brief title for this submission..."
+                  value={submission.title || ''}
+                  onChange={(e) => setSubmission(prev => ({ ...prev, title: e.target.value }))}
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="submission-type">Submission Type</Label>
+                <Select 
+                  value={submission.submissionType} 
+                  onValueChange={(value) => setSubmission(prev => ({ ...prev, submissionType: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="general_report">General Report</SelectItem>
+                    <SelectItem value="crisis_report">Crisis Report</SelectItem>
+                    <SelectItem value="survivor_report">Survivor Update</SelectItem>
+                    <SelectItem value="monthly_summary">Monthly Summary</SelectItem>
+                    <SelectItem value="story_submission">Story Submission</SelectItem>
+                    <SelectItem value="financial_report">Financial Report</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="urgency">Urgency Level</Label>
+                <Select 
+                  value={submission.urgencyLevel} 
+                  onValueChange={(value: any) => setSubmission(prev => ({ ...prev, urgencyLevel: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low Priority</SelectItem>
+                    <SelectItem value="medium">Medium Priority</SelectItem>
+                    <SelectItem value="high">High Priority</SelectItem>
+                    <SelectItem value="critical">Critical/Emergency</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex items-center space-x-2 pt-6">
+                <input
+                  type="checkbox"
+                  id="contains-survivor-story"
+                  checked={submission.containsSurvivorStory}
+                  onChange={(e) => {
+                    setSubmission(prev => ({ ...prev, containsSurvivorStory: e.target.checked }));
+                    setShowSurvivorFields(e.target.checked);
+                  }}
+                  className="h-4 w-4"
+                />
+                <Label htmlFor="contains-survivor-story" className="text-sm">
+                  This contains survivor information
+                </Label>
+              </div>
             </div>
           </div>
+
+          {/* Survivor Data Fields */}
+          {showSurvivorFields && (
+            <div className="space-y-4 p-4 bg-blue-50 dark:bg-blue-950/30 rounded-lg border">
+              <div className="flex items-center gap-2 mb-3">
+                <User className="h-5 w-5 text-blue-600" />
+                <h3 className="font-medium text-blue-800 dark:text-blue-200">Survivor Information</h3>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="new-survivors">New Survivors</Label>
+                  <Input
+                    id="new-survivors"
+                    type="number"
+                    min="0"
+                    placeholder="0"
+                    value={submission.newSurvivors || ''}
+                    onChange={(e) => setSubmission(prev => ({ 
+                      ...prev, 
+                      newSurvivors: parseInt(e.target.value) || 0 
+                    }))}
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="existing-survivors">Existing Survivors</Label>
+                  <Input
+                    id="existing-survivors"
+                    type="number"
+                    min="0"
+                    placeholder="0"
+                    value={submission.existingSurvivors || ''}
+                    onChange={(e) => setSubmission(prev => ({ 
+                      ...prev, 
+                      existingSurvivors: parseInt(e.target.value) || 0 
+                    }))}
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="total-survivors">Total Survivors</Label>
+                  <Input
+                    id="total-survivors"
+                    type="number"
+                    min="0"
+                    placeholder="0"
+                    value={submission.survivorCount || ''}
+                    onChange={(e) => setSubmission(prev => ({ 
+                      ...prev, 
+                      survivorCount: parseInt(e.target.value) || 0 
+                    }))}
+                  />
+                </div>
+              </div>
+              
+              {submission.newSurvivors && submission.existingSurvivors && submission.survivorCount && 
+               (submission.newSurvivors + submission.existingSurvivors !== submission.survivorCount) && (
+                <div className="flex items-center gap-2 p-2 bg-red-100 dark:bg-red-950/30 rounded text-sm text-red-700 dark:text-red-300">
+                  <AlertTriangle className="h-4 w-4" />
+                  Numbers don't match: {submission.newSurvivors} + {submission.existingSurvivors} ≠ {submission.survivorCount}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Privacy Level Selection */}
+          <PrivacyLevelSelector
+            value={submission.privacyLevel}
+            onChange={(value) => setSubmission(prev => ({ ...prev, privacyLevel: value }))}
+            showSurvivorAnonymity={submission.containsSurvivorStory}
+            survivorAnonymity={submission.survivorAnonymityLevel}
+            onSurvivorAnonymityChange={(value) => setSubmission(prev => ({ ...prev, survivorAnonymityLevel: value }))}
+            showDescription={true}
+          />
 
           {/* Submit Button */}
           <Button 

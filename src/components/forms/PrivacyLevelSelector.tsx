@@ -11,11 +11,15 @@ import {
   Heart, 
   Globe, 
   Info,
-  HelpCircle
+  HelpCircle,
+  Lock,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 export type PrivacyLevel = 'internal' | 'ally' | 'donor' | 'public';
+export type SurvivorAnonymityLevel = 'none' | 'partial_name' | 'partial_location' | 'partial_exploitation' | 'full';
 
 interface PrivacyOption {
   value: PrivacyLevel;
@@ -27,13 +31,21 @@ interface PrivacyOption {
   examples: string[];
 }
 
+interface AnonymityOption {
+  value: SurvivorAnonymityLevel;
+  label: string;
+  description: string;
+  icon: any;
+  details: string;
+}
+
 const privacyOptions: PrivacyOption[] = [
   {
     value: 'internal',
     label: 'Internal Only',
-    description: 'Visible only to your organization staff',
-    icon: Shield,
-    color: 'text-blue-600',
+    description: 'Visible only to your organization staff for case management',
+    icon: Lock,
+    color: 'text-red-600',
     audience: 'Your team only',
     examples: [
       'Sensitive case details',
@@ -44,41 +56,79 @@ const privacyOptions: PrivacyOption[] = [
   {
     value: 'ally',
     label: 'Ally Network',
-    description: 'Shared with Ally Global Foundation headquarters',
-    icon: Users,
-    color: 'text-green-600',
+    description: 'Shared with Ally Global Foundation headquarters for coordination',
+    icon: Shield,
+    color: 'text-orange-600',
     audience: 'Your team + Ally HQ',
     examples: [
       'Program updates and metrics',
       'Training requests',
-      'Resource needs assessment'
+      'Resource coordination needs'
     ]
   },
   {
     value: 'donor',
     label: 'Donor Reports',
-    description: 'Included in donor reports and impact summaries',
+    description: 'May be included in donor reports and funding updates',
     icon: Heart,
-    color: 'text-orange-600',
+    color: 'text-blue-600',
     audience: 'Your team + Ally HQ + Donors',
     examples: [
-      'Success stories (anonymized)',
-      'Program impact metrics',
-      'Community outcomes'
+      'Impact stories (anonymized)',
+      'Program outcomes',
+      'Success metrics'
     ]
   },
   {
     value: 'public',
-    label: 'Public Sharing',
-    description: 'May be shared publicly for awareness and advocacy',
+    label: 'Public Advocacy',
+    description: 'Can be used publicly for awareness and advocacy campaigns',
     icon: Globe,
-    color: 'text-purple-600',
+    color: 'text-green-600',
     audience: 'Everyone',
     examples: [
       'Community awareness campaigns',
       'Public education materials',
-      'Advocacy success stories'
+      'Advocacy testimonials'
     ]
+  }
+];
+
+const anonymityOptions: AnonymityOption[] = [
+  {
+    value: 'full',
+    label: 'Full Anonymity',
+    description: 'No identifying information shared',
+    icon: EyeOff,
+    details: 'Complete anonymization - no names, locations, or identifying details'
+  },
+  {
+    value: 'partial_name',
+    label: 'Name Hidden',
+    description: 'Name anonymized, other details may be shared',
+    icon: Eye,
+    details: 'Location and situation type visible, but name protected'
+  },
+  {
+    value: 'partial_location',
+    label: 'Location Hidden',
+    description: 'Location anonymized, name and situation may be shared',
+    icon: Eye,
+    details: 'Name and exploitation type visible, but location protected'
+  },
+  {
+    value: 'partial_exploitation',
+    label: 'Situation Hidden',
+    description: 'Exploitation type hidden, name and location may be shared',
+    icon: Eye,
+    details: 'Name and location visible, but exploitation details protected'
+  },
+  {
+    value: 'none',
+    label: 'Full Transparency',
+    description: 'All information can be shared (with explicit consent)',
+    icon: Eye,
+    details: 'Complete transparency with explicit survivor consent only'
   }
 ];
 
@@ -88,6 +138,9 @@ interface PrivacyLevelSelectorProps {
   disabled?: boolean;
   showDescription?: boolean;
   className?: string;
+  showSurvivorAnonymity?: boolean;
+  survivorAnonymity?: SurvivorAnonymityLevel;
+  onSurvivorAnonymityChange?: (value: SurvivorAnonymityLevel) => void;
 }
 
 export function PrivacyLevelSelector({
@@ -95,7 +148,10 @@ export function PrivacyLevelSelector({
   onChange,
   disabled = false,
   showDescription = true,
-  className = ""
+  className = "",
+  showSurvivorAnonymity = false,
+  survivorAnonymity = 'full',
+  onSurvivorAnonymityChange
 }: PrivacyLevelSelectorProps) {
   const [showExplanation, setShowExplanation] = useState(false);
   const selectedOption = privacyOptions.find(option => option.value === value);
@@ -215,6 +271,72 @@ export function PrivacyLevelSelector({
         </Card>
       )}
 
+      {/* Survivor Anonymity Section */}
+      {showSurvivorAnonymity && onSurvivorAnonymityChange && (
+        <div className="space-y-3 pt-4 border-t">
+          <div className="flex items-center gap-2">
+            <Label>Survivor Anonymity Level</Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                  <HelpCircle className="h-4 w-4 text-muted-foreground" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-80" align="start">
+                <div className="space-y-3">
+                  <h4 className="font-semibold">Survivor Privacy Protection</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Different survivors have different comfort levels with sharing their information. 
+                    Always respect survivor preferences and obtain explicit consent.
+                  </p>
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          <Select 
+            value={survivorAnonymity} 
+            onValueChange={onSurvivorAnonymityChange}
+            disabled={disabled}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select anonymity level" />
+            </SelectTrigger>
+            <SelectContent>
+              {anonymityOptions.map((option) => {
+                const Icon = option.icon;
+                return (
+                  <SelectItem key={option.value} value={option.value}>
+                    <div className="flex items-center gap-2">
+                      <Icon className="h-4 w-4 text-muted-foreground" />
+                      <span>{option.label}</span>
+                    </div>
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+
+          {/* Selected Anonymity Details */}
+          {(() => {
+            const selectedAnonymity = anonymityOptions.find(option => option.value === survivorAnonymity);
+            return selectedAnonymity ? (
+              <Card className="bg-muted/30">
+                <CardContent className="pt-3 pb-3">
+                  <div className="flex items-start gap-2">
+                    <selectedAnonymity.icon className="h-4 w-4 mt-0.5 text-muted-foreground" />
+                    <div className="text-sm">
+                      <p className="font-medium">{selectedAnonymity.label}</p>
+                      <p className="text-muted-foreground text-xs">{selectedAnonymity.details}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : null;
+          })()}
+        </div>
+      )}
+
       {/* Crisis Alert Notice */}
       {value === 'internal' && (
         <div className="text-xs text-muted-foreground">
@@ -222,6 +344,25 @@ export function PrivacyLevelSelector({
           Crisis situations will automatically escalate regardless of privacy setting
         </div>
       )}
+
+      {/* Survivor Protection Notice */}
+      <Card className="border-blue-200 bg-blue-50 dark:bg-blue-950/30">
+        <CardContent className="pt-4">
+          <div className="flex items-start gap-2">
+            <Shield className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+            <div className="text-sm">
+              <p className="font-medium text-blue-800 dark:text-blue-200 mb-1">
+                Child Protection & Survivor Safety
+              </p>
+              <p className="text-blue-700 dark:text-blue-300">
+                All information is handled according to strict child protection protocols. 
+                Survivor stories are never shared without explicit consent and appropriate 
+                anonymization. Safety is our highest priority.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
