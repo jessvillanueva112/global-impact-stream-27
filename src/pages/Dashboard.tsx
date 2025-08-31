@@ -1,27 +1,34 @@
-import { Header } from "@/components/layout/Header";
-import { BottomNav } from "@/components/navigation/BottomNav";
+import { MainLayout } from "@/components/layout/MainLayout";
 import { LiveDashboard } from "@/components/dashboard/LiveDashboard";
 import { useState } from "react";
+
+// Mock user data - replace with actual authentication
+const mockUser = {
+  id: "1",
+  name: "Sarah Johnson",
+  email: "sarah@allyimpact.org",
+  role: "admin" as const,
+};
 
 const Dashboard = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
 
-  return (
-    <div className="min-h-screen bg-background">
-      <Header 
-        title="Ally Impact Hub"
-        notifications={2}
-      />
-      
-      <main className="container mx-auto px-4 py-6 pb-20 md:pb-6">
-        <LiveDashboard />
-      </main>
+  const handleLogout = () => {
+    // Implement logout logic
+    console.log("Logout clicked");
+  };
 
-      <BottomNav 
-        activeTab={activeTab} 
-        onTabChange={setActiveTab} 
-      />
-    </div>
+  return (
+    <MainLayout
+      title="Impact Dashboard"
+      user={mockUser}
+      activeTab={activeTab}
+      onTabChange={setActiveTab}
+      onLogout={handleLogout}
+      notifications={2}
+    >
+      <LiveDashboard />
+    </MainLayout>
   );
 };
 
