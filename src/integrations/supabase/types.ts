@@ -53,6 +53,41 @@ export type Database = {
         }
         Relationships: []
       }
+      form_drafts: {
+        Row: {
+          created_at: string
+          draft_data: Json
+          id: string
+          submission_type_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          draft_data?: Json
+          id?: string
+          submission_type_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          draft_data?: Json
+          id?: string
+          submission_type_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "form_drafts_submission_type_id_fkey"
+            columns: ["submission_type_id"]
+            isOneToOne: false
+            referencedRelation: "submission_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       partners: {
         Row: {
           access_level: string
@@ -125,39 +160,146 @@ export type Database = {
         }
         Relationships: []
       }
+      submission_analytics: {
+        Row: {
+          event_data: Json | null
+          event_type: string
+          id: string
+          submission_id: string | null
+          timestamp: string
+        }
+        Insert: {
+          event_data?: Json | null
+          event_type: string
+          id?: string
+          submission_id?: string | null
+          timestamp?: string
+        }
+        Update: {
+          event_data?: Json | null
+          event_type?: string
+          id?: string
+          submission_id?: string | null
+          timestamp?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "submission_analytics_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "submissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      submission_types: {
+        Row: {
+          active: boolean | null
+          created_at: string
+          description: string | null
+          id: string
+          max_character_limit: number | null
+          name: string
+          optional_fields: Json
+          required_fields: Json
+          supports_media: boolean | null
+          supports_voice: boolean | null
+          updated_at: string
+          validation_rules: Json
+        }
+        Insert: {
+          active?: boolean | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          max_character_limit?: number | null
+          name: string
+          optional_fields?: Json
+          required_fields?: Json
+          supports_media?: boolean | null
+          supports_voice?: boolean | null
+          updated_at?: string
+          validation_rules?: Json
+        }
+        Update: {
+          active?: boolean | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          max_character_limit?: number | null
+          name?: string
+          optional_fields?: Json
+          required_fields?: Json
+          supports_media?: boolean | null
+          supports_voice?: boolean | null
+          updated_at?: string
+          validation_rules?: Json
+        }
+        Relationships: []
+      }
       submissions: {
         Row: {
+          character_count: number | null
           content: string
           created_at: string
           id: string
           media_files: Json | null
+          next_retry_at: string | null
           partner_id: string
           privacy_level: string
           processed: boolean
+          processing_log: Json | null
+          processing_status: string | null
+          progress_step: number | null
+          retry_count: number | null
+          submission_type_id: string | null
           timestamp: string
+          total_steps: number | null
           updated_at: string
+          validation_errors: Json | null
+          validation_overrides: Json | null
         }
         Insert: {
+          character_count?: number | null
           content: string
           created_at?: string
           id?: string
           media_files?: Json | null
+          next_retry_at?: string | null
           partner_id: string
           privacy_level?: string
           processed?: boolean
+          processing_log?: Json | null
+          processing_status?: string | null
+          progress_step?: number | null
+          retry_count?: number | null
+          submission_type_id?: string | null
           timestamp?: string
+          total_steps?: number | null
           updated_at?: string
+          validation_errors?: Json | null
+          validation_overrides?: Json | null
         }
         Update: {
+          character_count?: number | null
           content?: string
           created_at?: string
           id?: string
           media_files?: Json | null
+          next_retry_at?: string | null
           partner_id?: string
           privacy_level?: string
           processed?: boolean
+          processing_log?: Json | null
+          processing_status?: string | null
+          progress_step?: number | null
+          retry_count?: number | null
+          submission_type_id?: string | null
           timestamp?: string
+          total_steps?: number | null
           updated_at?: string
+          validation_errors?: Json | null
+          validation_overrides?: Json | null
         }
         Relationships: [
           {
@@ -165,6 +307,13 @@ export type Database = {
             columns: ["partner_id"]
             isOneToOne: false
             referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "submissions_submission_type_id_fkey"
+            columns: ["submission_type_id"]
+            isOneToOne: false
+            referencedRelation: "submission_types"
             referencedColumns: ["id"]
           },
         ]
