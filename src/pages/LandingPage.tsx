@@ -16,9 +16,14 @@ const LandingPage = () => {
             </div>
             <span className="text-xl font-bold text-white">Ally Impact Hub</span>
           </div>
-          <Button asChild variant="outline" className="bg-white/10 text-white border-white/20 hover:bg-white/20">
-            <Link to="/dashboard">Get Started</Link>
-          </Button>
+          <div className="flex gap-2">
+            <Button asChild variant="outline" className="bg-white/10 text-white border-white/20 hover:bg-white/20">
+              <Link to="/auth">Sign In</Link>
+            </Button>
+            <Button asChild className="bg-white text-primary hover:bg-white/90">
+              <Link to="/dashboard">Demo</Link>
+            </Button>
+          </div>
         </nav>
       </header>
 
@@ -33,9 +38,14 @@ const LandingPage = () => {
             AI-powered platform with voice recording, auto-translation, and real-time dashboards 
             for tracking impact in child protection programs worldwide.
           </p>
-          <Button asChild size="lg" className="bg-white text-primary hover:bg-white/90">
-            <Link to="/dashboard">Start Tracking Impact</Link>
-          </Button>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Button asChild size="lg" className="bg-white text-primary hover:bg-white/90">
+              <Link to="/auth">Get Started</Link>
+            </Button>
+            <Button asChild size="lg" variant="outline" className="bg-white/10 text-white border-white/20 hover:bg-white/20">
+              <Link to="/dashboard">View Demo</Link>
+            </Button>
+          </div>
         </section>
 
         {/* Features Section */}
@@ -107,7 +117,7 @@ const LandingPage = () => {
               Join thousands of organizations using Ally Impact Hub to measure and amplify their impact.
             </p>
             <Button asChild size="lg" className="bg-gradient-primary text-primary-foreground shadow-primary">
-              <Link to="/dashboard">Start Your Journey</Link>
+              <Link to="/auth">Start Your Journey</Link>
             </Button>
           </div>
         </section>

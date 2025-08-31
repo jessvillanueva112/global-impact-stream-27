@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "@/components/theme-provider";
 import LandingPage from "./pages/LandingPage";
+import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Submit from "./pages/Submit";
 import Reports from "./pages/Reports";
@@ -23,6 +24,7 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<LandingPage />} />
+            <Route path="/auth" element={<Auth />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/submit" element={<Submit />} />
             <Route path="/reports" element={<Reports />} />
