@@ -14,7 +14,83 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      partners: {
+        Row: {
+          access_level: string
+          country: string
+          created_at: string
+          id: string
+          language: string
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_level?: string
+          country: string
+          created_at?: string
+          id?: string
+          language: string
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_level?: string
+          country?: string
+          created_at?: string
+          id?: string
+          language?: string
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      submissions: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          media_files: Json | null
+          partner_id: string
+          privacy_level: string
+          processed: boolean
+          timestamp: string
+          updated_at: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          media_files?: Json | null
+          partner_id: string
+          privacy_level?: string
+          processed?: boolean
+          timestamp?: string
+          updated_at?: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          media_files?: Json | null
+          partner_id?: string
+          privacy_level?: string
+          processed?: boolean
+          timestamp?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "submissions_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
