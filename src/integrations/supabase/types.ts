@@ -14,6 +14,45 @@ export type Database = {
   }
   public: {
     Tables: {
+      file_metadata: {
+        Row: {
+          bucket_name: string
+          created_at: string
+          file_path: string
+          file_size: number
+          id: string
+          mime_type: string
+          original_name: string
+          updated_at: string
+          upload_date: string
+          user_id: string
+        }
+        Insert: {
+          bucket_name: string
+          created_at?: string
+          file_path: string
+          file_size: number
+          id?: string
+          mime_type: string
+          original_name: string
+          updated_at?: string
+          upload_date?: string
+          user_id: string
+        }
+        Update: {
+          bucket_name?: string
+          created_at?: string
+          file_path?: string
+          file_size?: number
+          id?: string
+          mime_type?: string
+          original_name?: string
+          updated_at?: string
+          upload_date?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       partners: {
         Row: {
           access_level: string

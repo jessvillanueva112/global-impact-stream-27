@@ -12,6 +12,7 @@ import Dashboard from "./pages/Dashboard";
 import Submit from "./pages/Submit";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
+import FileStorage from "./pages/FileStorage";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 
@@ -33,6 +34,7 @@ const App = () => (
               <Route path="/submit" element={<Submit />} />
               <Route path="/reports" element={<Reports />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/files" element={<FileStorage />} />
               <Route path="/app" element={<Index />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
