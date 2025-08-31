@@ -13,6 +13,15 @@ export interface SubmissionType {
   active: boolean;
 }
 
+export interface SubmissionAnalytics {
+  totalSubmissions: number;
+  successRate: number;
+  averageProcessingTime: number;
+  submissionsByType: { [key: string]: number };
+  submissionsByStatus: { [key: string]: number };
+  recentTrends: Array<{ date: string; count: number }>;
+}
+
 export interface ValidationRule {
   field: string;
   rule: string;

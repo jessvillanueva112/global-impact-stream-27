@@ -1,4 +1,6 @@
-// Mock Translation Service (will be replaced with Google Translate API later)
+import { supabase } from '@/integrations/supabase/client';
+
+// Real Translation Service with OpenAI Integration
 export interface TranslationResult {
   translatedText: string;
   originalText: string;
@@ -74,19 +76,28 @@ class TranslationServiceMock {
    * Detect the language of the given text
    */
   async detectLanguage(text: string): Promise<{ language: string; confidence: number }> {
-    // Mock language detection
-    await new Promise(resolve => setTimeout(resolve, 100));
-    
-    // Simple mock detection based on character patterns
-    if (/[\u0900-\u097F]/.test(text)) {
-      return { language: 'ne', confidence: 0.95 };
+    try {
+      const { data, error } = await supabase.functions.invoke('translate-text', {
+        body: { text, targetLanguage: 'en' }
+      });
+
+      if (error) throw error;
+
+      return {
+        language: data.sourceLanguage || 'en',
+        confidence: data.confidence || 0.85
+      };
+    } catch (error) {
+      console.error('Language detection failed:', error);
+      // Fallback to simple detection
+      if (/[\u0900-\u097F]/.test(text)) {
+        return { language: 'ne', confidence: 0.70 };
+      }
+      if (/[\u1780-\u17FF]/.test(text)) {
+        return { language: 'km', confidence: 0.70 };
+      }
+      return { language: 'en', confidence: 0.60 };
     }
-    
-    if (/[\u1780-\u17FF]/.test(text)) {
-      return { language: 'km', confidence: 0.95 };
-    }
-    
-    return { language: 'en', confidence: 0.90 };
   }
 
   /**
@@ -113,52 +124,38 @@ class TranslationServiceMock {
       };
     }
 
-    // Mock translation delay
-    await new Promise(resolve => setTimeout(resolve, 200 + Math.random() * 300));
+    try {
+      const { data, error } = await supabase.functions.invoke('translate-text', {
+        body: { text, sourceLanguage, targetLanguage }
+      });
 
-    let translatedText = text;
-    let confidence = 0.75;
+      if (error) throw error;
 
-    // Try to find translation in mock data
-    const sourceMock = this.mockTranslations[sourceLanguage];
-    if (sourceMock && sourceMock[targetLanguage]) {
-      const lowerText = text.toLowerCase();
-      if (sourceMock[targetLanguage][lowerText]) {
-        translatedText = sourceMock[targetLanguage][lowerText];
-        confidence = 0.95;
-      } else {
-        // Mock translation by adding prefix
-        translatedText = `[${targetLanguage.toUpperCase()}] ${text}`;
-        confidence = 0.70;
-      }
-    } else {
-      // Fallback mock translation
-      translatedText = `[TRANSLATED to ${targetLanguage.toUpperCase()}] ${text}`;
-      confidence = 0.65;
+      // Cache the result
+      this.cache.set(cacheKey, {
+        id: crypto.randomUUID(),
+        sourceText: text,
+        targetText: data.translatedText,
+        sourceLanguage,
+        targetLanguage,
+        confidence: data.confidence,
+        createdAt: new Date().toISOString(),
+        lastUsed: new Date().toISOString()
+      });
+
+      return data;
+    } catch (error) {
+      console.error('Translation failed:', error);
+      // Fallback to original text
+      return {
+        translatedText: text,
+        originalText: text,
+        sourceLanguage,
+        targetLanguage,
+        confidence: 0.0,
+        timestamp: new Date().toISOString()
+      };
     }
-
-    const result: TranslationResult = {
-      translatedText,
-      originalText: text,
-      sourceLanguage,
-      targetLanguage,
-      confidence,
-      timestamp: new Date().toISOString()
-    };
-
-    // Cache the result
-    this.cache.set(cacheKey, {
-      id: crypto.randomUUID(),
-      sourceText: text,
-      targetText: translatedText,
-      sourceLanguage,
-      targetLanguage,
-      confidence,
-      createdAt: new Date().toISOString(),
-      lastUsed: new Date().toISOString()
-    });
-
-    return result;
   }
 
   /**
@@ -188,20 +185,25 @@ class TranslationServiceMock {
    * Auto-detect and translate text
    */
   async autoTranslate(text: string, targetLanguage: string = 'en'): Promise<TranslationResult> {
-    const detection = await this.detectLanguage(text);
-    
-    if (detection.language === targetLanguage) {
+    try {
+      const { data, error } = await supabase.functions.invoke('translate-text', {
+        body: { text, targetLanguage }
+      });
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Auto-translation failed:', error);
+      // Fallback
       return {
         translatedText: text,
         originalText: text,
-        sourceLanguage: detection.language,
+        sourceLanguage: 'unknown',
         targetLanguage,
-        confidence: 1.0,
+        confidence: 0.0,
         timestamp: new Date().toISOString()
       };
     }
-
-    return this.translateText(text, detection.language, targetLanguage);
   }
 
   /**
