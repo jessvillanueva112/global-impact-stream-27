@@ -6,24 +6,25 @@ import { FileManager } from '@/components/files/FileManager';
 import { Button } from '@/components/ui/button';
 import { FolderOpen, Upload as UploadIcon, Settings } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { FileUploadError } from '@/utils/fileUpload';
 
 export default function FileStorage() {
   const [activeTab, setActiveTab] = useState('upload');
 
-  const handleUploadComplete = (files: { file: File; path: string }[]) => {
+  const handleUploadComplete = (results: { url: string; metadata: any }[]) => {
     toast({
       title: 'Upload successful',
-      description: `${files.length} file(s) uploaded successfully`,
+      description: `${results.length} file(s) uploaded successfully`,
     });
     
     // Switch to manager tab to see uploaded files
     setActiveTab('manage');
   };
 
-  const handleUploadError = (error: string) => {
+  const handleUploadError = (error: FileUploadError) => {
     toast({
       title: 'Upload failed',
-      description: error,
+      description: error.message,
       variant: 'destructive'
     });
   };
@@ -68,7 +69,7 @@ export default function FileStorage() {
                   multiple={true}
                   maxFiles={10}
                   onUploadComplete={handleUploadComplete}
-                  onUploadError={handleUploadError}
+                  onError={handleUploadError}
                 />
               </CardContent>
             </Card>
@@ -84,7 +85,7 @@ export default function FileStorage() {
                   multiple={true}
                   maxFiles={5}
                   onUploadComplete={handleUploadComplete}
-                  onUploadError={handleUploadError}
+                  onError={handleUploadError}
                 />
               </CardContent>
             </Card>
@@ -120,7 +121,7 @@ export default function FileStorage() {
         </TabsContent>
 
         <TabsContent value="manage">
-          <FileManager />
+          <FileManager bucket="photos" />
         </TabsContent>
 
         <TabsContent value="settings">

@@ -18,7 +18,7 @@ import { cn } from '@/lib/utils';
 
 interface FileUploadProps {
   bucket: 'photos' | 'audio';
-  path: string;
+  path?: string;
   accept?: string;
   multiple?: boolean;
   maxFiles?: number;
@@ -31,7 +31,7 @@ interface FileUploadProps {
 
 export function FileUpload({
   bucket,
-  path,
+  path = '',
   accept,
   multiple = false,
   maxFiles = 5,
@@ -180,7 +180,7 @@ export function FileUpload({
           const updatedProgress = [{
             ...progressItem,
             progress,
-            status: progress === 100 ? 'completed' : 'uploading' as const,
+            status: progress === 100 ? 'completed' as const : 'uploading' as const,
           }];
           setUploadProgress(updatedProgress);
           onUploadProgress?.(updatedProgress);
