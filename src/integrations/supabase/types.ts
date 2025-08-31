@@ -14,6 +14,66 @@ export type Database = {
   }
   public: {
     Tables: {
+      crisis_alerts: {
+        Row: {
+          acknowledged_at: string | null
+          acknowledged_by: string | null
+          alert_type: string
+          created_at: string | null
+          description: string | null
+          escalated: boolean | null
+          escalated_at: string | null
+          id: string
+          partner_id: string | null
+          resolution_notes: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          response_time_minutes: number | null
+          severity: string
+          status: string | null
+          submission_id: string | null
+          title: string
+        }
+        Insert: {
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
+          alert_type: string
+          created_at?: string | null
+          description?: string | null
+          escalated?: boolean | null
+          escalated_at?: string | null
+          id?: string
+          partner_id?: string | null
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          response_time_minutes?: number | null
+          severity: string
+          status?: string | null
+          submission_id?: string | null
+          title: string
+        }
+        Update: {
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
+          alert_type?: string
+          created_at?: string | null
+          description?: string | null
+          escalated?: boolean | null
+          escalated_at?: string | null
+          id?: string
+          partner_id?: string | null
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          response_time_minutes?: number | null
+          severity?: string
+          status?: string | null
+          submission_id?: string | null
+          title?: string
+        }
+        Relationships: []
+      }
       file_metadata: {
         Row: {
           bucket_name: string
@@ -88,6 +148,48 @@ export type Database = {
           },
         ]
       }
+      organizations: {
+        Row: {
+          active: boolean | null
+          address: string | null
+          contact_email: string | null
+          country: string
+          created_at: string | null
+          id: string
+          language: string
+          name: string
+          org_type: string
+          phone: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          active?: boolean | null
+          address?: string | null
+          contact_email?: string | null
+          country: string
+          created_at?: string | null
+          id?: string
+          language: string
+          name: string
+          org_type: string
+          phone?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          active?: boolean | null
+          address?: string | null
+          contact_email?: string | null
+          country?: string
+          created_at?: string | null
+          id?: string
+          language?: string
+          name?: string
+          org_type?: string
+          phone?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       partners: {
         Row: {
           access_level: string
@@ -123,6 +225,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          access_level: string | null
           avatar_url: string | null
           bio: string | null
           country: string | null
@@ -131,10 +234,12 @@ export type Database = {
           language: string | null
           name: string | null
           onboarded: boolean
+          partner_id: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          access_level?: string | null
           avatar_url?: string | null
           bio?: string | null
           country?: string | null
@@ -143,10 +248,12 @@ export type Database = {
           language?: string | null
           name?: string | null
           onboarded?: boolean
+          partner_id?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          access_level?: string | null
           avatar_url?: string | null
           bio?: string | null
           country?: string | null
@@ -155,8 +262,60 @@ export type Database = {
           language?: string | null
           name?: string | null
           onboarded?: boolean
+          partner_id?: string | null
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      reports: {
+        Row: {
+          created_at: string | null
+          download_count: number | null
+          export_date: string | null
+          exported_by: string | null
+          format_type: string
+          generated_content: Json | null
+          id: string
+          key_insights: string[] | null
+          partner_id: string | null
+          report_period_end: string | null
+          report_period_start: string | null
+          submission_ids: string[]
+          summary: string | null
+          survivor_stories: Json | null
+        }
+        Insert: {
+          created_at?: string | null
+          download_count?: number | null
+          export_date?: string | null
+          exported_by?: string | null
+          format_type: string
+          generated_content?: Json | null
+          id?: string
+          key_insights?: string[] | null
+          partner_id?: string | null
+          report_period_end?: string | null
+          report_period_start?: string | null
+          submission_ids: string[]
+          summary?: string | null
+          survivor_stories?: Json | null
+        }
+        Update: {
+          created_at?: string | null
+          download_count?: number | null
+          export_date?: string | null
+          exported_by?: string | null
+          format_type?: string
+          generated_content?: Json | null
+          id?: string
+          key_insights?: string[] | null
+          partner_id?: string | null
+          report_period_end?: string | null
+          report_period_start?: string | null
+          submission_ids?: string[]
+          summary?: string | null
+          survivor_stories?: Json | null
         }
         Relationships: []
       }
@@ -239,65 +398,122 @@ export type Database = {
       }
       submissions: {
         Row: {
+          ai_analysis: Json | null
+          audio_transcription: string | null
           character_count: number | null
           content: string
+          content_approved: boolean | null
           created_at: string
+          crisis_flag: boolean | null
+          existing_survivors: number | null
           id: string
           media_files: Json | null
+          new_survivors: number | null
           next_retry_at: string | null
+          original_language: string | null
           partner_id: string
+          pii_detected: boolean | null
           privacy_level: string
           processed: boolean
+          processed_at: string | null
           processing_log: Json | null
           processing_status: string | null
           progress_step: number | null
           retry_count: number | null
+          sentiment_score: number | null
+          story_extraction: Json | null
+          submission_category: string | null
           submission_type_id: string | null
+          submitted_at: string | null
+          survivor_anonymity_level: string | null
+          survivor_count: number | null
           timestamp: string
           total_steps: number | null
+          transcription_confidence: number | null
+          translated_content: string | null
+          translation_confidence: number | null
           updated_at: string
+          urgency_level: string | null
           validation_errors: Json | null
           validation_overrides: Json | null
         }
         Insert: {
+          ai_analysis?: Json | null
+          audio_transcription?: string | null
           character_count?: number | null
           content: string
+          content_approved?: boolean | null
           created_at?: string
+          crisis_flag?: boolean | null
+          existing_survivors?: number | null
           id?: string
           media_files?: Json | null
+          new_survivors?: number | null
           next_retry_at?: string | null
+          original_language?: string | null
           partner_id: string
+          pii_detected?: boolean | null
           privacy_level?: string
           processed?: boolean
+          processed_at?: string | null
           processing_log?: Json | null
           processing_status?: string | null
           progress_step?: number | null
           retry_count?: number | null
+          sentiment_score?: number | null
+          story_extraction?: Json | null
+          submission_category?: string | null
           submission_type_id?: string | null
+          submitted_at?: string | null
+          survivor_anonymity_level?: string | null
+          survivor_count?: number | null
           timestamp?: string
           total_steps?: number | null
+          transcription_confidence?: number | null
+          translated_content?: string | null
+          translation_confidence?: number | null
           updated_at?: string
+          urgency_level?: string | null
           validation_errors?: Json | null
           validation_overrides?: Json | null
         }
         Update: {
+          ai_analysis?: Json | null
+          audio_transcription?: string | null
           character_count?: number | null
           content?: string
+          content_approved?: boolean | null
           created_at?: string
+          crisis_flag?: boolean | null
+          existing_survivors?: number | null
           id?: string
           media_files?: Json | null
+          new_survivors?: number | null
           next_retry_at?: string | null
+          original_language?: string | null
           partner_id?: string
+          pii_detected?: boolean | null
           privacy_level?: string
           processed?: boolean
+          processed_at?: string | null
           processing_log?: Json | null
           processing_status?: string | null
           progress_step?: number | null
           retry_count?: number | null
+          sentiment_score?: number | null
+          story_extraction?: Json | null
+          submission_category?: string | null
           submission_type_id?: string | null
+          submitted_at?: string | null
+          survivor_anonymity_level?: string | null
+          survivor_count?: number | null
           timestamp?: string
           total_steps?: number | null
+          transcription_confidence?: number | null
+          translated_content?: string | null
+          translation_confidence?: number | null
           updated_at?: string
+          urgency_level?: string | null
           validation_errors?: Json | null
           validation_overrides?: Json | null
         }
@@ -317,6 +533,72 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      survivor_stories: {
+        Row: {
+          anonymity_level: string
+          approved_for_advocacy: boolean | null
+          approved_for_donors: boolean | null
+          approved_for_public: boolean | null
+          confidence_score: number | null
+          content: string
+          created_at: string | null
+          estimated_read_time: number | null
+          id: string
+          impact_outcome: string | null
+          partner_id: string | null
+          review_notes: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          sentiment: string | null
+          submission_id: string | null
+          title: string
+          updated_at: string | null
+          word_count: number | null
+        }
+        Insert: {
+          anonymity_level: string
+          approved_for_advocacy?: boolean | null
+          approved_for_donors?: boolean | null
+          approved_for_public?: boolean | null
+          confidence_score?: number | null
+          content: string
+          created_at?: string | null
+          estimated_read_time?: number | null
+          id?: string
+          impact_outcome?: string | null
+          partner_id?: string | null
+          review_notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          sentiment?: string | null
+          submission_id?: string | null
+          title: string
+          updated_at?: string | null
+          word_count?: number | null
+        }
+        Update: {
+          anonymity_level?: string
+          approved_for_advocacy?: boolean | null
+          approved_for_donors?: boolean | null
+          approved_for_public?: boolean | null
+          confidence_score?: number | null
+          content?: string
+          created_at?: string | null
+          estimated_read_time?: number | null
+          id?: string
+          impact_outcome?: string | null
+          partner_id?: string | null
+          review_notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          sentiment?: string | null
+          submission_id?: string | null
+          title?: string
+          updated_at?: string | null
+          word_count?: number | null
+        }
+        Relationships: []
       }
     }
     Views: {
