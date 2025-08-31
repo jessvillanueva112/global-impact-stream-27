@@ -38,9 +38,9 @@ export default function Auth() {
         setSession(session);
         setUser(session?.user ?? null);
         
-        // Redirect authenticated users to dashboard
+        // Redirect authenticated users to onboarding
         if (session?.user) {
-          navigate('/dashboard');
+          navigate('/onboarding');
         }
       }
     );
@@ -51,7 +51,7 @@ export default function Auth() {
       setUser(session?.user ?? null);
       
       if (session?.user) {
-        navigate('/dashboard');
+        navigate('/onboarding');
       }
     });
 
@@ -75,7 +75,7 @@ export default function Auth() {
       return;
     }
 
-    const redirectUrl = `${window.location.origin}/dashboard`;
+    const redirectUrl = `${window.location.origin}/onboarding`;
     
     const { error } = await supabase.auth.signUp({
       email: signUpData.email,
