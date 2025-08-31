@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Heart, Shield, Users, BarChart3 } from "lucide-react";
 import { Link } from "react-router-dom";
+import { ConnectionStatus } from "@/components/database/ConnectionStatus";
 
 const LandingPage = () => {
   return (
@@ -108,6 +109,13 @@ const LandingPage = () => {
             <Button asChild size="lg" className="bg-gradient-primary text-primary-foreground shadow-primary">
               <Link to="/dashboard">Start Your Journey</Link>
             </Button>
+          </div>
+        </section>
+
+        {/* Connection Status */}
+        <section className="px-6 py-12 bg-background">
+          <div className="max-w-6xl mx-auto flex justify-center">
+            <ConnectionStatus />
           </div>
         </section>
       </main>
