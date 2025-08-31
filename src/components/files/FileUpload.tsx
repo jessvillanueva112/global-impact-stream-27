@@ -1,343 +1,375 @@
 import { useState, useCallback, useRef } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
+import { Upload, X, File, Image, Mic, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { uploadFile, validateFile, FileUploadOptions } from '@/utils/fileUpload';
-import { autoCompressImage } from '@/utils/imageCompression';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from '@/hooks/use-toast';
 import { 
-  Upload, 
-  File as FileIcon, 
-  Image as ImageIcon, 
-  Music, 
-  X, 
-  CheckCircle,
-  AlertCircle,
-  Loader2
-} from 'lucide-react';
-
-export interface FileUploadState {
-  file: File;
-  status: 'pending' | 'uploading' | 'success' | 'error';
-  progress: number;
-  error?: string;
-  uploadPath?: string;
-}
+  uploadFile, 
+  uploadMultipleFiles, 
+  validateFile, 
+  formatFileSize, 
+  FileUploadProgress,
+  FileUploadError 
+} from '@/utils/fileUpload';
+import { cn } from '@/lib/utils';
 
 interface FileUploadProps {
   bucket: 'photos' | 'audio';
-  folder?: string;
+  path: string;
+  accept?: string;
   multiple?: boolean;
   maxFiles?: number;
-  onUploadComplete?: (files: { file: File; path: string }[]) => void;
-  onUploadError?: (error: string) => void;
   disabled?: boolean;
+  onUploadComplete?: (results: Array<{ url: string; metadata: any }>) => void;
+  onUploadProgress?: (progress: FileUploadProgress[]) => void;
+  onError?: (error: FileUploadError) => void;
   className?: string;
 }
 
 export function FileUpload({
   bucket,
-  folder,
+  path,
+  accept,
   multiple = false,
   maxFiles = 5,
-  onUploadComplete,
-  onUploadError,
   disabled = false,
-  className = ''
+  onUploadComplete,
+  onUploadProgress,
+  onError,
+  className,
 }: FileUploadProps) {
-  const [files, setFiles] = useState<FileUploadState[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<FileUploadProgress[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const isImage = bucket === 'photos';
-  const acceptedTypes = isImage 
-    ? 'image/jpeg,image/jpg,image/png,image/webp'
+  // Determine file type and accept attribute
+  const fileType = bucket === 'photos' ? 'image' : 'audio';
+  const defaultAccept = bucket === 'photos' 
+    ? 'image/jpeg,image/png,image/webp' 
     : 'audio/wav,audio/mp3,audio/mpeg,audio/m4a,audio/webm';
 
-  const handleFiles = useCallback(async (fileList: File[]) => {
-    if (disabled) return;
-
-    // Check file limits
-    const totalFiles = files.length + fileList.length;
-    if (totalFiles > maxFiles) {
-      const error = `Maximum ${maxFiles} files allowed. Please remove some files first.`;
-      onUploadError?.(error);
-      toast({
-        title: 'Too many files',
-        description: error,
-        variant: 'destructive'
-      });
-      return;
-    }
-
-    // Validate and add files
-    const newFiles: FileUploadState[] = [];
-    
-    for (const file of fileList) {
-      const validation = validateFile(file, bucket);
-      if (!validation.isValid) {
-        onUploadError?.(validation.error!);
-        toast({
-          title: 'Invalid file',
-          description: validation.error,
-          variant: 'destructive'
-        });
-        continue;
-      }
-
-      newFiles.push({
-        file,
-        status: 'pending',
-        progress: 0
-      });
-    }
-
-    setFiles(prev => [...prev, ...newFiles]);
-
-    // Start uploading
-    uploadFiles(newFiles);
-  }, [files, maxFiles, bucket, disabled, onUploadError]);
-
-  const uploadFiles = async (filesToUpload: FileUploadState[]) => {
-    const uploadedFiles: { file: File; path: string }[] = [];
-
-    for (let i = 0; i < filesToUpload.length; i++) {
-      const fileState = filesToUpload[i];
-      let processedFile = fileState.file;
-
-      try {
-        // Update status to uploading
-        setFiles(prev => prev.map(f => 
-          f.file === fileState.file 
-            ? { ...f, status: 'uploading' as const, progress: 0 }
-            : f
-        ));
-
-        // Compress image if needed
-        if (isImage) {
-          processedFile = await autoCompressImage(fileState.file);
-        }
-
-        // Upload file
-        const options: FileUploadOptions = {
-          bucket,
-          folder,
-          onProgress: (progress) => {
-            setFiles(prev => prev.map(f => 
-              f.file === fileState.file 
-                ? { ...f, progress }
-                : f
-            ));
-          }
-        };
-
-        const { data, error } = await uploadFile(processedFile, options);
-
-        if (error) {
-          throw error;
-        }
-
-        if (data) {
-          // Update status to success
-          setFiles(prev => prev.map(f => 
-            f.file === fileState.file 
-              ? { 
-                  ...f, 
-                  status: 'success' as const, 
-                  progress: 100,
-                  uploadPath: data.path
-                }
-              : f
-          ));
-
-          uploadedFiles.push({ file: fileState.file, path: data.path });
-        }
-
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Upload failed';
-        
-        // Update status to error
-        setFiles(prev => prev.map(f => 
-          f.file === fileState.file 
-            ? { 
-                ...f, 
-                status: 'error' as const, 
-                error: errorMessage
-              }
-            : f
-        ));
-
-        onUploadError?.(errorMessage);
-        toast({
-          title: 'Upload failed',
-          description: `Failed to upload ${fileState.file.name}: ${errorMessage}`,
-          variant: 'destructive'
-        });
-      }
-    }
-
-    // Call completion callback
-    if (uploadedFiles.length > 0) {
-      onUploadComplete?.(uploadedFiles);
-      toast({
-        title: 'Upload complete',
-        description: `Successfully uploaded ${uploadedFiles.length} file(s)`
-      });
-    }
-  };
-
-  const removeFile = (fileToRemove: File) => {
-    setFiles(prev => prev.filter(f => f.file !== fileToRemove));
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
+  const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     if (!disabled) {
       setIsDragOver(true);
     }
-  };
+  }, [disabled]);
 
-  const handleDragLeave = (e: React.DragEvent) => {
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
-  };
+  }, []);
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
     
     if (disabled) return;
 
-    const droppedFiles = Array.from(e.dataTransfer.files);
-    handleFiles(droppedFiles);
-  };
+    const files = Array.from(e.dataTransfer.files);
+    handleFiles(files);
+  }, [disabled]);
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFiles = Array.from(e.target.files || []);
-    handleFiles(selectedFiles);
-    // Reset input value to allow re-uploading same file
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    handleFiles(files);
+    
+    // Reset input
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+  }, []);
+
+  const handleFiles = async (files: File[]) => {
+    if (files.length === 0) return;
+
+    // Limit number of files
+    const filesToProcess = files.slice(0, maxFiles);
+    if (files.length > maxFiles) {
+      toast({
+        title: "Too many files",
+        description: `Only the first ${maxFiles} files will be uploaded.`,
+        variant: "destructive",
+      });
+    }
+
+    // Initialize progress tracking
+    const progressItems: FileUploadProgress[] = filesToProcess.map(file => ({
+      file,
+      progress: 0,
+      status: 'pending',
+    }));
+
+    setUploadProgress(progressItems);
+    setIsUploading(true);
+    onUploadProgress?.(progressItems);
+
+    try {
+      // Validate all files first
+      for (const file of filesToProcess) {
+        try {
+          validateFile(file, fileType);
+        } catch (error) {
+          if (error instanceof FileUploadError) {
+            const updatedProgress = progressItems.map(item => 
+              item.file === file 
+                ? { ...item, status: 'error' as const, error: error.message }
+                : item
+            );
+            setUploadProgress(updatedProgress);
+            onUploadProgress?.(updatedProgress);
+            onError?.(error);
+            continue;
+          }
+        }
+      }
+
+      // Upload files
+      if (multiple) {
+        const results = await uploadMultipleFiles(
+          filesToProcess.filter(file => 
+            !progressItems.find(item => item.file === file && item.status === 'error')
+          ),
+          bucket,
+          path,
+          (fileIndex, progress) => {
+            const updatedProgress = [...progressItems];
+            if (updatedProgress[fileIndex]) {
+              updatedProgress[fileIndex] = {
+                ...updatedProgress[fileIndex],
+                progress,
+                status: progress === 100 ? 'completed' : 'uploading',
+              };
+              setUploadProgress(updatedProgress);
+              onUploadProgress?.(updatedProgress);
+            }
+          }
+        );
+
+        // Update with final results
+        const finalProgress = progressItems.map((item, index) => {
+          const result = results[index];
+          return result ? {
+            ...item,
+            status: 'completed' as const,
+            progress: 100,
+            url: result.url,
+            metadata: result.metadata,
+          } : item;
+        });
+
+        setUploadProgress(finalProgress);
+        onUploadProgress?.(finalProgress);
+        onUploadComplete?.(results);
+        
+        toast({
+          title: "Upload successful",
+          description: `${results.length} file(s) uploaded successfully.`,
+        });
+
+      } else {
+        // Single file upload
+        const file = filesToProcess[0];
+        const progressItem = progressItems[0];
+        
+        const result = await uploadFile(file, bucket, path, (progress) => {
+          const updatedProgress = [{
+            ...progressItem,
+            progress,
+            status: progress === 100 ? 'completed' : 'uploading' as const,
+          }];
+          setUploadProgress(updatedProgress);
+          onUploadProgress?.(updatedProgress);
+        });
+
+        const finalProgress = [{
+          ...progressItem,
+          status: 'completed' as const,
+          progress: 100,
+          url: result.url,
+          metadata: result.metadata,
+        }];
+
+        setUploadProgress(finalProgress);
+        onUploadProgress?.(finalProgress);
+        onUploadComplete?.([result]);
+        
+        toast({
+          title: "Upload successful",
+          description: "File uploaded successfully.",
+        });
+      }
+
+    } catch (error) {
+      const fileError = error instanceof FileUploadError 
+        ? error 
+        : new FileUploadError('Upload failed', 'UPLOAD_ERROR');
+      
+      const updatedProgress = progressItems.map(item => ({
+        ...item,
+        status: 'error' as const,
+        error: fileError.message,
+      }));
+      
+      setUploadProgress(updatedProgress);
+      onUploadProgress?.(updatedProgress);
+      onError?.(fileError);
+      
+      toast({
+        title: "Upload failed",
+        description: fileError.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploading(false);
+    }
   };
 
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  const removeFile = (fileIndex: number) => {
+    const updatedProgress = uploadProgress.filter((_, index) => index !== fileIndex);
+    setUploadProgress(updatedProgress);
+    onUploadProgress?.(updatedProgress);
   };
 
   const getFileIcon = (file: File) => {
     if (file.type.startsWith('image/')) {
-      return <ImageIcon className="h-4 w-4" />;
+      return <Image className="h-4 w-4" />;
     } else if (file.type.startsWith('audio/')) {
-      return <Music className="h-4 w-4" />;
+      return <Mic className="h-4 w-4" />;
     }
-    return <FileIcon className="h-4 w-4" />;
+    return <File className="h-4 w-4" />;
   };
 
-  const getStatusIcon = (status: FileUploadState['status']) => {
+  const getStatusIcon = (status: FileUploadProgress['status']) => {
     switch (status) {
-      case 'success':
-        return <CheckCircle className="h-4 w-4 text-green-500" />;
+      case 'completed':
+        return <CheckCircle className="h-4 w-4 text-accent-success" />;
       case 'error':
-        return <AlertCircle className="h-4 w-4 text-red-500" />;
+        return <AlertCircle className="h-4 w-4 text-destructive" />;
       case 'uploading':
-        return <Loader2 className="h-4 w-4 animate-spin text-blue-500" />;
+      case 'processing':
+        return <Loader2 className="h-4 w-4 animate-spin" />;
       default:
         return null;
     }
   };
 
   return (
-    <div className={`space-y-4 ${className}`}>
+    <div className={cn("w-full", className)}>
       {/* Drop Zone */}
-      <Card 
-        className={`
-          border-2 border-dashed transition-colors cursor-pointer
-          ${isDragOver ? 'border-primary bg-primary/5' : 'border-muted-foreground/25'}
-          ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-primary/50'}
-        `}
+      <Card
+        className={cn(
+          "border-2 border-dashed transition-colors cursor-pointer",
+          isDragOver && "border-primary bg-primary/5",
+          disabled && "opacity-50 cursor-not-allowed"
+        )}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         onClick={() => !disabled && fileInputRef.current?.click()}
       >
-        <CardContent className="flex flex-col items-center justify-center py-8 text-center">
-          <Upload className="h-10 w-10 text-muted-foreground mb-4" />
-          <h3 className="font-semibold mb-2">
-            {isImage ? 'Upload Images' : 'Upload Audio Files'}
-          </h3>
-          <p className="text-sm text-muted-foreground mb-4">
-            Drag and drop files here, or click to browse
-          </p>
-          <div className="text-xs text-muted-foreground">
-            <p>
-              Supported formats: {isImage ? 'JPG, PNG, WebP' : 'WAV, MP3, M4A, WebM'}
+        <CardContent className="flex flex-col items-center justify-center p-6 text-center">
+          <Upload className={cn(
+            "h-8 w-8 mb-2",
+            isDragOver ? "text-primary" : "text-muted-foreground"
+          )} />
+          
+          <div className="space-y-1">
+            <p className="text-sm font-medium">
+              {isDragOver 
+                ? `Drop ${fileType}s here` 
+                : `Upload ${fileType}s`
+              }
             </p>
-            <p>
-              Max size: {isImage ? '5MB' : '10MB'} • Max files: {maxFiles}
+            <p className="text-xs text-muted-foreground">
+              {multiple 
+                ? `Drag & drop up to ${maxFiles} files or click to browse`
+                : 'Drag & drop a file or click to browse'
+              }
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {bucket === 'photos' 
+                ? 'JPG, PNG, WebP up to 5MB' 
+                : 'WAV, MP3, M4A, WebM up to 10MB'
+              }
             </p>
           </div>
         </CardContent>
       </Card>
 
-      {/* Hidden file input */}
+      {/* Hidden File Input */}
       <input
         ref={fileInputRef}
         type="file"
-        accept={acceptedTypes}
+        accept={accept || defaultAccept}
         multiple={multiple}
+        disabled={disabled}
         onChange={handleFileSelect}
         className="hidden"
-        disabled={disabled}
       />
 
-      {/* File List */}
-      {files.length > 0 && (
-        <div className="space-y-2">
-          <h4 className="font-medium">Files ({files.length}/{maxFiles})</h4>
-          {files.map((fileState, index) => (
-            <Card key={`${fileState.file.name}-${index}`} className="p-3">
-              <div className="flex items-center gap-3">
-                {getFileIcon(fileState.file)}
-                
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
+      {/* Upload Progress */}
+      {uploadProgress.length > 0 && (
+        <div className="mt-4 space-y-2">
+          <h4 className="text-sm font-medium">
+            {isUploading ? 'Uploading...' : 'Upload Results'}
+          </h4>
+          
+          {uploadProgress.map((item, index) => (
+            <Card key={index} className="p-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2 flex-1 min-w-0">
+                  {getFileIcon(item.file)}
+                  <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">
-                      {fileState.file.name}
+                      {item.file.name}
                     </p>
-                    <Badge variant="outline" className="text-xs">
-                      {formatFileSize(fileState.file.size)}
-                    </Badge>
-                    {getStatusIcon(fileState.status)}
+                    <p className="text-xs text-muted-foreground">
+                      {formatFileSize(item.file.size)}
+                    </p>
                   </div>
+                </div>
+                
+                <div className="flex items-center space-x-2">
+                  <Badge variant={
+                    item.status === 'completed' ? 'default' :
+                    item.status === 'error' ? 'destructive' :
+                    'secondary'
+                  }>
+                    {item.status}
+                  </Badge>
                   
-                  {fileState.status === 'uploading' && (
-                    <Progress value={fileState.progress} className="mt-2 h-1" />
-                  )}
+                  {getStatusIcon(item.status)}
                   
-                  {fileState.error && (
-                    <p className="text-xs text-red-500 mt-1">{fileState.error}</p>
+                  {!isUploading && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeFile(index)}
+                      className="h-8 w-8 p-0"
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
                   )}
                 </div>
-
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    removeFile(fileState.file);
-                  }}
-                  disabled={fileState.status === 'uploading'}
-                  className="h-8 w-8 p-0"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
               </div>
+              
+              {item.status === 'uploading' && (
+                <Progress value={item.progress} className="mt-2" />
+              )}
+              
+              {item.error && (
+                <Alert variant="destructive" className="mt-2">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription className="text-xs">
+                    {item.error}
+                  </AlertDescription>
+                </Alert>
+              )}
             </Card>
           ))}
         </div>

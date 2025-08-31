@@ -1,263 +1,141 @@
 import { supabase } from '@/integrations/supabase/client';
+import { compressImage } from './imageCompression';
 
-export interface FileUploadOptions {
-  bucket: 'photos' | 'audio';
-  folder?: string;
-  onProgress?: (progress: number) => void;
-}
+// File type configurations
+export const SUPPORTED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+export const SUPPORTED_AUDIO_TYPES = ['audio/wav', 'audio/mp3', 'audio/mpeg', 'audio/m4a', 'audio/webm'];
 
-export interface FileValidationResult {
-  isValid: boolean;
+// File size limits (in bytes)
+export const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
+export const MAX_AUDIO_SIZE = 10 * 1024 * 1024; // 10MB
+
+export interface FileUploadProgress {
+  file: File;
+  progress: number;
+  status: 'pending' | 'uploading' | 'processing' | 'completed' | 'error';
   error?: string;
+  url?: string;
+  metadata?: FileMetadata;
 }
 
 export interface FileMetadata {
-  id: string;
-  user_id: string;
-  bucket_name: string;
-  file_path: string;
-  original_name: string;
-  file_size: number;
-  mime_type: string;
-  upload_date: string;
+  originalName: string;
+  size: number;
+  type: string;
+  uploadDate: string;
+  compressedSize?: number;
+  duration?: number;
+  dimensions?: { width: number; height: number };
 }
 
-// File type validation configurations
-const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-const ALLOWED_AUDIO_TYPES = ['audio/wav', 'audio/mp3', 'audio/mpeg', 'audio/m4a', 'audio/webm'];
-const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
-const MAX_AUDIO_SIZE = 10 * 1024 * 1024; // 10MB
+export class FileUploadError extends Error {
+  constructor(message: string, public code: string) {
+    super(message);
+    this.name = 'FileUploadError';
+  }
+}
 
-/**
- * Validates file type and size based on bucket requirements
- */
-export function validateFile(file: File, bucket: 'photos' | 'audio'): FileValidationResult {
-  if (bucket === 'photos') {
-    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
-      return {
-        isValid: false,
-        error: 'Invalid image format. Please upload JPG, PNG, or WebP files only.'
-      };
-    }
-    
-    if (file.size > MAX_IMAGE_SIZE) {
-      return {
-        isValid: false,
-        error: 'Image file is too large. Please upload files smaller than 5MB.'
-      };
-    }
-  } else if (bucket === 'audio') {
-    if (!ALLOWED_AUDIO_TYPES.includes(file.type)) {
-      return {
-        isValid: false,
-        error: 'Invalid audio format. Please upload WAV, MP3, M4A, or WebM files only.'
-      };
-    }
-    
-    if (file.size > MAX_AUDIO_SIZE) {
-      return {
-        isValid: false,
-        error: 'Audio file is too large. Please upload files smaller than 10MB.'
-      };
-    }
+export function validateFile(file: File, type: 'image' | 'audio'): void {
+  const supportedTypes = type === 'image' ? SUPPORTED_IMAGE_TYPES : SUPPORTED_AUDIO_TYPES;
+  const maxSize = type === 'image' ? MAX_IMAGE_SIZE : MAX_AUDIO_SIZE;
+  
+  if (!supportedTypes.includes(file.type)) {
+    throw new FileUploadError(`Unsupported ${type} format`, 'INVALID_FILE_TYPE');
   }
   
-  return { isValid: true };
-}
-
-/**
- * Generates a unique file path for storage
- */
-export function generateFilePath(userId: string, originalName: string, folder?: string): string {
-  const timestamp = Date.now();
-  const randomSuffix = Math.random().toString(36).substring(2, 8);
-  const fileExtension = originalName.split('.').pop();
-  const baseName = originalName.split('.').slice(0, -1).join('.');
-  const cleanBaseName = baseName.replace(/[^a-zA-Z0-9-_]/g, '');
-  
-  const fileName = `${cleanBaseName}_${timestamp}_${randomSuffix}.${fileExtension}`;
-  
-  if (folder) {
-    return `${userId}/${folder}/${fileName}`;
+  if (file.size > maxSize) {
+    const maxSizeMB = maxSize / (1024 * 1024);
+    throw new FileUploadError(`File size exceeds ${maxSizeMB}MB limit`, 'FILE_TOO_LARGE');
   }
-  return `${userId}/${fileName}`;
 }
 
-/**
- * Uploads a file to Supabase storage with progress tracking
- */
 export async function uploadFile(
-  file: File, 
-  options: FileUploadOptions
-): Promise<{ data: { path: string; fullPath: string } | null; error: Error | null }> {
-  try {
-    // Get current user
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      throw new Error('User not authenticated');
-    }
-
-    // Validate file
-    const validation = validateFile(file, options.bucket);
-    if (!validation.isValid) {
-      throw new Error(validation.error);
-    }
-
-    // Generate file path
-    const filePath = generateFilePath(user.id, file.name, options.folder);
-
-    // Upload file to storage
-    const { data, error } = await supabase.storage
-      .from(options.bucket)
-      .upload(filePath, file, {
-        cacheControl: '3600',
-        upsert: false
-      });
-
-    if (error) {
-      throw error;
-    }
-
-    // Save file metadata
-    const metadata: Omit<FileMetadata, 'id' | 'upload_date'> = {
-      user_id: user.id,
-      bucket_name: options.bucket,
-      file_path: filePath,
-      original_name: file.name,
-      file_size: file.size,
-      mime_type: file.type
-    };
-
-    const { error: metadataError } = await supabase
-      .from('file_metadata')
-      .insert(metadata);
-
-    if (metadataError) {
-      console.warn('Failed to save file metadata:', metadataError);
-    }
-
-    return {
-      data: {
-        path: data.path,
-        fullPath: data.fullPath
-      },
-      error: null
-    };
-
-  } catch (error) {
-    console.error('Upload error:', error);
-    return {
-      data: null,
-      error: error instanceof Error ? error : new Error('Upload failed')
-    };
-  }
-}
-
-/**
- * Deletes a file from storage and metadata
- */
-export async function deleteFile(
+  file: File,
   bucket: 'photos' | 'audio',
-  filePath: string
-): Promise<{ error: Error | null }> {
-  try {
-    // Delete from storage
-    const { error: storageError } = await supabase.storage
-      .from(bucket)
-      .remove([filePath]);
-
-    if (storageError) {
-      throw storageError;
-    }
-
-    // Delete metadata
-    const { error: metadataError } = await supabase
-      .from('file_metadata')
-      .delete()
-      .eq('file_path', filePath);
-
-    if (metadataError) {
-      console.warn('Failed to delete file metadata:', metadataError);
-    }
-
-    return { error: null };
-
-  } catch (error) {
-    console.error('Delete error:', error);
-    return {
-      error: error instanceof Error ? error : new Error('Delete failed')
-    };
-  }
-}
-
-/**
- * Gets a signed URL for secure file access
- */
-export async function getSignedUrl(
-  bucket: 'photos' | 'audio',
-  filePath: string,
-  expiresIn: number = 3600 // 1 hour default
-): Promise<{ data: { signedUrl: string } | null; error: Error | null }> {
-  try {
-    const { data, error } = await supabase.storage
-      .from(bucket)
-      .createSignedUrl(filePath, expiresIn);
-
-    if (error) {
-      throw error;
-    }
-
-    return { data, error: null };
-
-  } catch (error) {
-    console.error('Signed URL error:', error);
-    return {
-      data: null,
-      error: error instanceof Error ? error : new Error('Failed to generate signed URL')
-    };
-  }
-}
-
-/**
- * Gets public URL for public files (photos bucket)
- */
-export function getPublicUrl(bucket: 'photos' | 'audio', filePath: string): string {
-  const { data } = supabase.storage
-    .from(bucket)
-    .getPublicUrl(filePath);
+  path: string,
+  onProgress?: (progress: number) => void
+): Promise<{ url: string; metadata: FileMetadata }> {
+  validateFile(file, bucket === 'photos' ? 'image' : 'audio');
   
-  return data.publicUrl;
+  let processedFile = file;
+  if (bucket === 'photos' && file.size > 1024 * 1024) {
+    processedFile = await compressImage(file, { quality: 0.8, maxWidth: 1920, maxHeight: 1920 });
+  }
+  
+  const timestamp = Date.now();
+  const randomString = Math.random().toString(36).substring(2);
+  const extension = file.name.split('.').pop();
+  const fileName = `${timestamp}_${randomString}.${extension}`;
+  const fullPath = `${path}/${fileName}`;
+  
+  onProgress?.(10);
+  
+  const { data, error } = await supabase.storage.from(bucket).upload(fullPath, processedFile);
+  
+  if (error) throw new FileUploadError(`Upload failed: ${error.message}`, 'UPLOAD_FAILED');
+  
+  onProgress?.(80);
+  
+  const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(fullPath);
+  
+  onProgress?.(100);
+  
+  return {
+    url: urlData.publicUrl,
+    metadata: {
+      originalName: file.name,
+      size: file.size,
+      type: file.type,
+      uploadDate: new Date().toISOString(),
+      compressedSize: processedFile.size !== file.size ? processedFile.size : undefined,
+    },
+  };
 }
 
-/**
- * Lists user's files with metadata
- */
-export async function listUserFiles(
-  bucket?: 'photos' | 'audio'
-): Promise<{ data: FileMetadata[] | null; error: Error | null }> {
-  try {
-    let query = supabase
-      .from('file_metadata')
-      .select('*')
-      .order('upload_date', { ascending: false });
-
-    if (bucket) {
-      query = query.eq('bucket_name', bucket);
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-      throw error;
-    }
-
-    return { data, error: null };
-
-  } catch (error) {
-    console.error('List files error:', error);
-    return {
-      data: null,
-      error: error instanceof Error ? error : new Error('Failed to list files')
-    };
+export async function uploadMultipleFiles(
+  files: File[],
+  bucket: 'photos' | 'audio',
+  path: string,
+  onProgress?: (fileIndex: number, progress: number) => void
+): Promise<Array<{ url: string; metadata: FileMetadata }>> {
+  const results = [];
+  for (let i = 0; i < files.length; i++) {
+    const result = await uploadFile(files[i], bucket, path, (progress) => onProgress?.(i, progress));
+    results.push(result);
   }
+  return results;
+}
+
+export async function getSignedUrl(bucket: 'photos' | 'audio', path: string, expiresIn: number = 3600): Promise<string> {
+  const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, expiresIn);
+  if (error) throw new FileUploadError(`Failed to create signed URL: ${error.message}`, 'SIGNED_URL_FAILED');
+  return data.signedUrl;
+}
+
+export async function deleteFile(bucket: 'photos' | 'audio', path: string): Promise<void> {
+  const { error } = await supabase.storage.from(bucket).remove([path]);
+  if (error) throw new FileUploadError(`Failed to delete file: ${error.message}`, 'DELETE_FAILED');
+}
+
+export async function deleteMultipleFiles(bucket: 'photos' | 'audio', paths: string[]): Promise<void> {
+  const { error } = await supabase.storage.from(bucket).remove(paths);
+  if (error) throw new FileUploadError(`Failed to delete files: ${error.message}`, 'DELETE_FAILED');
+}
+
+export async function listFiles(bucket: 'photos' | 'audio', path: string = ''): Promise<Array<{ name: string; id: string; metadata: any }>> {
+  const { data, error } = await supabase.storage.from(bucket).list(path);
+  if (error) throw new FileUploadError(`Failed to list files: ${error.message}`, 'LIST_FAILED');
+  return data || [];
+}
+
+export function formatFileSize(bytes: number): string {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+export async function getStorageUsage(bucket: 'photos' | 'audio'): Promise<{ used: number; limit: number; percentage: number }> {
+  return { used: 0, limit: 1024 * 1024 * 1024, percentage: 0 };
 }

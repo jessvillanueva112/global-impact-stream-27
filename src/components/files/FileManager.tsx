@@ -1,329 +1,569 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { listUserFiles, deleteFile, getPublicUrl, getSignedUrl, FileMetadata } from '@/utils/fileUpload';
-import { toast } from '@/hooks/use-toast';
+import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { 
-  FileIcon, 
-  Image as ImageIcon, 
-  Music, 
-  Trash2, 
+  Search, 
   Download, 
-  Search,
+  Trash2, 
+  Eye, 
+  File, 
+  Image, 
+  Mic, 
   Calendar,
   HardDrive,
-  Loader2
+  Filter,
+  Grid,
+  List,
+  MoreVertical
 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { toast } from '@/hooks/use-toast';
+import { 
+  listFiles, 
+  deleteFile, 
+  deleteMultipleFiles, 
+  formatFileSize, 
+  getSignedUrl,
+  getStorageUsage,
+  FileUploadError 
+} from '@/utils/fileUpload';
+import { cn } from '@/lib/utils';
 
-interface FileManagerProps {
-  bucket?: 'photos' | 'audio';
-  onFileSelect?: (file: FileMetadata) => void;
-  selectable?: boolean;
+interface FileItem {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+  uploadDate: string;
+  url?: string;
+  metadata?: any;
+  selected?: boolean;
 }
 
-export function FileManager({ bucket, onFileSelect, selectable = false }: FileManagerProps) {
-  const [files, setFiles] = useState<FileMetadata[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [deleting, setDeleting] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [bucketFilter, setBucketFilter] = useState<'all' | 'photos' | 'audio'>(bucket || 'all');
+interface FileManagerProps {
+  bucket: 'photos' | 'audio';
+  path?: string;
+  className?: string;
+  onFileSelect?: (file: FileItem) => void;
+  onFileDelete?: (file: FileItem) => void;
+  selectable?: boolean;
+  showStorageUsage?: boolean;
+}
 
+type ViewMode = 'grid' | 'list';
+type SortBy = 'name' | 'date' | 'size' | 'type';
+type SortOrder = 'asc' | 'desc';
+
+export function FileManager({
+  bucket,
+  path = '',
+  className,
+  onFileSelect,
+  onFileDelete,
+  selectable = false,
+  showStorageUsage = true,
+}: FileManagerProps) {
+  const [files, setFiles] = useState<FileItem[]>([]);
+  const [filteredFiles, setFilteredFiles] = useState<FileItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [sortBy, setSortBy] = useState<SortBy>('date');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
+  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [fileToDelete, setFileToDelete] = useState<FileItem | null>(null);
+  const [storageUsage, setStorageUsage] = useState({ used: 0, limit: 0, percentage: 0 });
+
+  // Load files
   useEffect(() => {
     loadFiles();
-  }, [bucket]);
+    if (showStorageUsage) {
+      loadStorageUsage();
+    }
+  }, [bucket, path]);
 
-  const loadFiles = async () => {
-    setLoading(true);
-    try {
-      const { data, error } = await listUserFiles(bucket);
+  // Filter and sort files
+  useEffect(() => {
+    let filtered = files.filter(file =>
+      file.name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
+    // Sort files
+    filtered.sort((a, b) => {
+      let comparison = 0;
       
-      if (error) {
-        throw error;
+      switch (sortBy) {
+        case 'name':
+          comparison = a.name.localeCompare(b.name);
+          break;
+        case 'date':
+          comparison = new Date(a.uploadDate).getTime() - new Date(b.uploadDate).getTime();
+          break;
+        case 'size':
+          comparison = a.size - b.size;
+          break;
+        case 'type':
+          comparison = a.type.localeCompare(b.type);
+          break;
       }
       
-      setFiles(data || []);
-    } catch (error) {
-      console.error('Error loading files:', error);
+      return sortOrder === 'asc' ? comparison : -comparison;
+    });
+
+    setFilteredFiles(filtered);
+  }, [files, searchQuery, sortBy, sortOrder]);
+
+  const loadFiles = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const fileList = await listFiles(bucket, path);
+      
+      const fileItems: FileItem[] = fileList.map(file => ({
+        id: file.id,
+        name: file.name,
+        size: file.metadata?.size || 0,
+        type: file.metadata?.mimetype || 'application/octet-stream',
+        uploadDate: file.metadata?.lastModified || new Date().toISOString(),
+        metadata: file.metadata,
+      }));
+      
+      setFiles(fileItems);
+    } catch (err) {
+      const error = err instanceof FileUploadError ? err.message : 'Failed to load files';
+      setError(error);
       toast({
-        title: 'Error loading files',
-        description: 'Failed to load your files. Please try again.',
-        variant: 'destructive'
+        title: "Error loading files",
+        description: error,
+        variant: "destructive",
       });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDelete = async (file: FileMetadata) => {
-    if (!confirm(`Are you sure you want to delete "${file.original_name}"?`)) {
-      return;
-    }
-
-    setDeleting(file.id);
+  const loadStorageUsage = async () => {
     try {
-      const { error } = await deleteFile(file.bucket_name as 'photos' | 'audio', file.file_path);
-      
-      if (error) {
-        throw error;
-      }
-      
-      setFiles(prev => prev.filter(f => f.id !== file.id));
-      toast({
-        title: 'File deleted',
-        description: `${file.original_name} has been deleted successfully.`
-      });
-    } catch (error) {
-      console.error('Error deleting file:', error);
-      toast({
-        title: 'Delete failed',
-        description: 'Failed to delete the file. Please try again.',
-        variant: 'destructive'
-      });
-    } finally {
-      setDeleting(null);
+      const usage = await getStorageUsage(bucket);
+      setStorageUsage(usage);
+    } catch (err) {
+      console.error('Failed to load storage usage:', err);
     }
   };
 
-  const handleDownload = async (file: FileMetadata) => {
-    try {
-      let url: string;
-      
-      if (file.bucket_name === 'photos') {
-        // Public bucket - use public URL
-        url = getPublicUrl(file.bucket_name, file.file_path);
+  const handleFileClick = async (file: FileItem) => {
+    if (selectable) {
+      const newSelected = new Set(selectedFiles);
+      if (newSelected.has(file.id)) {
+        newSelected.delete(file.id);
       } else {
-        // Private bucket - use signed URL
-        const { data, error } = await getSignedUrl(file.bucket_name as 'audio', file.file_path);
-        if (error || !data) {
-          throw new Error('Failed to generate download URL');
-        }
-        url = data.signedUrl;
+        newSelected.add(file.id);
       }
+      setSelectedFiles(newSelected);
+    }
+    
+    if (onFileSelect) {
+      // Get signed URL for secure access
+      try {
+        const signedUrl = await getSignedUrl(bucket, `${path}/${file.name}`);
+        onFileSelect({ ...file, url: signedUrl });
+      } catch (err) {
+        toast({
+          title: "Error accessing file",
+          description: "Failed to generate secure access URL",
+          variant: "destructive",
+        });
+      }
+    }
+  };
 
+  const handleDeleteFile = (file: FileItem) => {
+    setFileToDelete(file);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!fileToDelete) return;
+    
+    try {
+      await deleteFile(bucket, `${path}/${fileToDelete.name}`);
+      
+      setFiles(files.filter(f => f.id !== fileToDelete.id));
+      onFileDelete?.(fileToDelete);
+      
+      toast({
+        title: "File deleted",
+        description: `${fileToDelete.name} has been deleted successfully.`,
+      });
+    } catch (err) {
+      const error = err instanceof FileUploadError ? err.message : 'Failed to delete file';
+      toast({
+        title: "Error deleting file",
+        description: error,
+        variant: "destructive",
+      });
+    } finally {
+      setDeleteDialogOpen(false);
+      setFileToDelete(null);
+    }
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedFiles.size === 0) return;
+    
+    try {
+      const filesToDelete = files.filter(f => selectedFiles.has(f.id));
+      const paths = filesToDelete.map(f => `${path}/${f.name}`);
+      
+      await deleteMultipleFiles(bucket, paths);
+      
+      setFiles(files.filter(f => !selectedFiles.has(f.id)));
+      setSelectedFiles(new Set());
+      
+      toast({
+        title: "Files deleted",
+        description: `${filesToDelete.length} file(s) deleted successfully.`,
+      });
+    } catch (err) {
+      const error = err instanceof FileUploadError ? err.message : 'Failed to delete files';
+      toast({
+        title: "Error deleting files",
+        description: error,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDownloadFile = async (file: FileItem) => {
+    try {
+      const signedUrl = await getSignedUrl(bucket, `${path}/${file.name}`);
+      
       // Create download link
       const link = document.createElement('a');
-      link.href = url;
-      link.download = file.original_name;
+      link.href = signedUrl;
+      link.download = file.name;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-
+      
       toast({
-        title: 'Download started',
-        description: `Downloading ${file.original_name}...`
+        title: "Download started",
+        description: `Downloading ${file.name}...`,
       });
-    } catch (error) {
-      console.error('Error downloading file:', error);
+    } catch (err) {
       toast({
-        title: 'Download failed',
-        description: 'Failed to download the file. Please try again.',
-        variant: 'destructive'
+        title: "Download failed",
+        description: "Failed to download file",
+        variant: "destructive",
       });
     }
   };
 
-  const getFileIcon = (file: FileMetadata) => {
-    if (file.mime_type.startsWith('image/')) {
-      return <ImageIcon className="h-4 w-4" />;
-    } else if (file.mime_type.startsWith('audio/')) {
-      return <Music className="h-4 w-4" />;
+  const getFileIcon = (file: FileItem) => {
+    if (file.type.startsWith('image/')) {
+      return <Image className="h-4 w-4" />;
+    } else if (file.type.startsWith('audio/')) {
+      return <Mic className="h-4 w-4" />;
     }
-    return <FileIcon className="h-4 w-4" />;
+    return <File className="h-4 w-4" />;
   };
 
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-  };
-
-  const formatDate = (dateString: string): string => {
+  const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
     });
   };
 
-  // Filter files based on search term and bucket filter
-  const filteredFiles = files.filter(file => {
-    const matchesSearch = file.original_name.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesBucket = bucketFilter === 'all' || file.bucket_name === bucketFilter;
-    return matchesSearch && matchesBucket;
-  });
-
-  // Calculate storage usage
-  const totalSize = files.reduce((sum, file) => sum + file.file_size, 0);
-  const photoSize = files
-    .filter(f => f.bucket_name === 'photos')
-    .reduce((sum, file) => sum + file.file_size, 0);
-  const audioSize = files
-    .filter(f => f.bucket_name === 'audio')
-    .reduce((sum, file) => sum + file.file_size, 0);
-
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-8">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
+      <Card className={className}>
+        <CardContent className="flex items-center justify-center p-8">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading files...</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card className={className}>
+        <CardContent className="p-6">
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+          <Button onClick={loadFiles} className="mt-4">
+            Try Again
+          </Button>
+        </CardContent>
+      </Card>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Storage Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div className={cn("space-y-4", className)}>
+      {/* Storage Usage */}
+      {showStorageUsage && (
         <Card>
-          <CardContent className="flex items-center gap-2 p-4">
-            <HardDrive className="h-5 w-5 text-muted-foreground" />
-            <div>
-              <p className="text-sm font-medium">Total Storage</p>
-              <p className="text-xl font-bold">{formatFileSize(totalSize)}</p>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <HardDrive className="h-4 w-4" />
+                <span className="text-sm font-medium">Storage Usage</span>
+              </div>
+              <Badge variant="outline">
+                {formatFileSize(storageUsage.used)} / {formatFileSize(storageUsage.limit)}
+              </Badge>
+            </div>
+            <div className="mt-2 bg-muted rounded-full h-2">
+              <div 
+                className="bg-primary h-2 rounded-full transition-all"
+                style={{ width: `${Math.min(storageUsage.percentage, 100)}%` }}
+              />
             </div>
           </CardContent>
         </Card>
-        
-        <Card>
-          <CardContent className="flex items-center gap-2 p-4">
-            <ImageIcon className="h-5 w-5 text-blue-500" />
-            <div>
-              <p className="text-sm font-medium">Photos</p>
-              <p className="text-xl font-bold">{formatFileSize(photoSize)}</p>
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardContent className="flex items-center gap-2 p-4">
-            <Music className="h-5 w-5 text-green-500" />
-            <div>
-              <p className="text-sm font-medium">Audio</p>
-              <p className="text-xl font-bold">{formatFileSize(audioSize)}</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      )}
 
-      {/* Filters */}
+      {/* Controls */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span>Your Files ({filteredFiles.length})</span>
-            <Button onClick={loadFiles} variant="outline" size="sm">
-              Refresh
-            </Button>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-col sm:flex-row gap-4">
+        <CardHeader className="pb-3">
+          <div className="flex flex-col space-y-3 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
+            <CardTitle className="flex items-center space-x-2">
+              {getFileIcon({ type: bucket === 'photos' ? 'image/' : 'audio/' } as FileItem)}
+              <span>
+                {bucket === 'photos' ? 'Photos' : 'Audio Files'} 
+                ({filteredFiles.length})
+              </span>
+            </CardTitle>
+            
+            <div className="flex items-center space-x-2">
+              {selectedFiles.size > 0 && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleDeleteSelected}
+                >
+                  <Trash2 className="h-4 w-4 mr-1" />
+                  Delete ({selectedFiles.size})
+                </Button>
+              )}
+              
+              <div className="flex items-center space-x-1 border rounded-md">
+                <Button
+                  variant={viewMode === 'grid' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setViewMode('grid')}
+                >
+                  <Grid className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant={viewMode === 'list' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setViewMode('list')}
+                >
+                  <List className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+          
+          <div className="flex flex-col space-y-2 sm:flex-row sm:space-y-0 sm:space-x-2">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search files..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9"
               />
             </div>
             
-            {!bucket && (
-              <Select value={bucketFilter} onValueChange={(value: any) => setBucketFilter(value)}>
-                <SelectTrigger className="w-full sm:w-40">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Files</SelectItem>
-                  <SelectItem value="photos">Photos Only</SelectItem>
-                  <SelectItem value="audio">Audio Only</SelectItem>
-                </SelectContent>
-              </Select>
-            )}
+            <Select value={sortBy} onValueChange={(value: SortBy) => setSortBy(value)}>
+              <SelectTrigger className="w-32">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="name">Name</SelectItem>
+                <SelectItem value="date">Date</SelectItem>
+                <SelectItem value="size">Size</SelectItem>
+                <SelectItem value="type">Type</SelectItem>
+              </SelectContent>
+            </Select>
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+            >
+              <Filter className="h-4 w-4 mr-1" />
+              {sortOrder === 'asc' ? '↑' : '↓'}
+            </Button>
           </div>
-
-          {/* File List */}
+        </CardHeader>
+        
+        <CardContent>
           {filteredFiles.length === 0 ? (
             <div className="text-center py-8">
-              <FileIcon className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="font-semibold mb-2">No files found</h3>
+              <File className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-lg font-semibold mb-2">No files found</h3>
               <p className="text-muted-foreground">
-                {searchTerm ? 'Try adjusting your search terms.' : 'Upload some files to get started.'}
+                {searchQuery ? 'Try adjusting your search criteria.' : 'Upload some files to get started.'}
               </p>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className={cn(
+              viewMode === 'grid' 
+                ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
+                : "space-y-2"
+            )}>
               {filteredFiles.map((file) => (
-                <Card 
-                  key={file.id} 
-                  className={`p-4 transition-colors ${
-                    selectable ? 'cursor-pointer hover:bg-muted/50' : ''
-                  }`}
-                  onClick={() => selectable && onFileSelect?.(file)}
+                <Card
+                  key={file.id}
+                  className={cn(
+                    "cursor-pointer transition-colors hover:bg-muted/50",
+                    selectedFiles.has(file.id) && "ring-2 ring-primary",
+                    viewMode === 'list' && "p-3"
+                  )}
+                  onClick={() => handleFileClick(file)}
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      {getFileIcon(file)}
+                  {viewMode === 'grid' ? (
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between mb-2">
+                        {getFileIcon(file)}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleDownloadFile(file)}>
+                              <Download className="h-4 w-4 mr-2" />
+                              Download
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleDeleteFile(file)}>
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                       
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">{file.original_name}</p>
-                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <Calendar className="h-3 w-3" />
-                            {formatDate(file.upload_date)}
-                          </span>
-                          <Badge variant="outline" className="text-xs">
-                            {formatFileSize(file.file_size)}
-                          </Badge>
-                          <Badge variant="secondary" className="text-xs">
-                            {file.bucket_name}
-                          </Badge>
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium truncate" title={file.name}>
+                          {file.name}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatFileSize(file.size)}
+                        </p>
+                        <p className="text-xs text-muted-foreground flex items-center">
+                          <Calendar className="h-3 w-3 mr-1" />
+                          {formatDate(file.uploadDate)}
+                        </p>
+                      </div>
+                    </CardContent>
+                  ) : (
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3 flex-1 min-w-0">
+                        {getFileIcon(file)}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">
+                            {file.name}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatFileSize(file.size)} • {formatDate(file.uploadDate)}
+                          </p>
                         </div>
                       </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDownload(file);
-                        }}
-                        className="h-8 w-8 p-0"
-                      >
-                        <Download className="h-4 w-4" />
-                      </Button>
                       
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDelete(file);
-                        }}
-                        disabled={deleting === file.id}
-                        className="h-8 w-8 p-0 text-red-500 hover:text-red-700"
-                      >
-                        {deleting === file.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Trash2 className="h-4 w-4" />
-                        )}
-                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleDownloadFile(file)}>
+                            <Download className="h-4 w-4 mr-2" />
+                            Download
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleDeleteFile(file)}>
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
-                  </div>
+                  )}
                 </Card>
               ))}
             </div>
           )}
         </CardContent>
       </Card>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete File</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{fileToDelete?.name}"? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
